@@ -1,0 +1,186 @@
+#!/usr/bin/env python
+
+import argparse, os, shutil
+
+import glob
+
+try:
+    import rospkg
+except:
+    pass
+
+from usgs_map_retrieval.get_usgs_map_module import GetUSGSMap
+
+from  usgs_map_retrieval.get_sim_env_module import WorldFileUpdate
+
+req_json = {'texture': None, 'heightmap': None}
+req_url = {'texture': None, 'heightmap': None}
+
+req_json['texture'] = {'bbox': '',
+            'bboxSR': 3857,
+            'size': '2056,2056',
+            'imageSR': 4326, 
+            'time': '',
+            'format': 'png',
+            'pixelType': 'UNKNOWN',
+            'noData': '',
+            'noDataInterpretation': 'esriNoDataMatchAny',
+            'interpolation': '+RSP_BilinearInterpolation',
+            'compression': '',
+            'compressionQuality': '',
+            'bandIds': '',
+            'sliceId': '',
+            'mosaicRule': '',
+            'renderingRule': '', 
+            'adjustAspectRatio': 'true',
+            'lercVersion': 1,
+            'compressionTolerance': '',
+            'renderingRule': '',
+            'f': 'image'}
+
+
+req_json['heightmap'] = {'bbox': '',
+            'bboxSR': 3857,
+            'size': '257,257',
+            'imageSR': 4326, 
+            'time': '',
+            'format': 'tiff',
+            'pixelType': 'UNKNOWN',
+            'noData': '',
+            'noDataInterpretation': 'esriNoDataMatchAny',
+            'interpolation': '+RSP_BilinearInterpolation',
+            'compression': '',
+            'compressionQuality': '',
+            'bandIds': '0',
+            'sliceId': '',
+            'mosaicRule': '',
+            'renderingRule': '',
+            'f': 'image'}
+
+req_url['texture'] = 'https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPPlus/ImageServer/exportImage'
+req_url['heightmap'] = 'https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/exportImage'
+
+
+
+def purgeGazeboFiles():
+    # Remove files that cause Gazebo to crash when updating the texture or heightmap.
+    client_dirs = glob.glob(os.path.join(os.path.expanduser('~'), '.gazebo/client*'))
+    if (client_dirs):
+        if(os.path.exists(os.path.join(client_dirs[0], 'default.log'))):
+            os.remove(os.path.join(client_dirs[0], 'default.log'))
+
+    server_dirs = glob.glob(os.path.join(os.path.expanduser('~'), '.gazebo/server*'))
+    if (server_dirs):
+        if(os.path.exists(os.path.join(server_dirs[0], 'default.log'))):
+            os.remove(os.path.join(server_dirs[0], 'default.log'))
+
+    paging_dir = glob.glob(os.path.join(os.path.expanduser('~'), '.gazebo/paging/heightmap*'))
+    if (paging_dir):
+        if(os.path.exists(os.path.join(paging_dir[0]))):
+            shutil.rmtree(paging_dir[0])
+
+
+
+if __name__ == '__main__':
+
+    # Configure a command line parser
+    parser = argparse.ArgumentParser(description='Retrieve USGS Data for use in ROS/Gazebo simulation for robots.\nThis accepts WGS 84 Longitude/Latitude (typical GPS or web map coordinates) for desired locations.')
+
+    # Add command line switches
+    parser.add_argument('lon', 
+                        type=float, 
+                        nargs=1,
+                        help='Longitude')
+    parser.add_argument('lat', 
+                        type=float, 
+                        nargs=1,
+                        help='Latitude')
+    parser.add_argument('-s', '--size',
+                        type=int, 
+                        nargs=1,
+                        required=False,
+                        default=1028,
+                        help='Size in meters of the environment (square)')
+    parser.add_argument('-e', '--epsg_num', 
+                        type=int, 
+                        nargs=1,
+                        required=False,
+                        default=3857,
+                        help='EPSG number of projection in which to return the map')
+    parser.add_argument('-a', '--alt_epsg',
+                        type=int,
+                        nargs=1,
+                        required=False,
+                        default=4326,
+                        help='EPSG number in which the lon/lat coordinates are specified')
+    parser.add_argument('-m', '--maps', 
+                        choices=['heightmap', 'texture'], 
+                        nargs='*',
+                        required=False,
+                        default=['heightmap', 'texture'],
+                        help='Which map to acquire')
+    parser.add_argument('--heightmap_res',
+                        nargs=1,
+                        required=False,
+                        default=8,
+                        help='Heightmap resolution must be 2^N+1, select N between 4 and 10')
+    parser.add_argument('--texture_res',
+                        nargs=1,
+                        required=False,
+                        default=2056,
+                        help='Texture resolution (should be multiple of heigtmap resolution)')
+    parser.add_argument('--url', 
+                        action='store_true',
+                        help='Display the server URLs')
+    parser.add_argument('--request_url', 
+                        action='store_true',
+                        help='Display the full request URLs')
+
+    # Parse the command line arguments
+    args = parser.parse_args()
+
+    # Get an instance of the class that retrieves the maps
+    GUM = GetUSGSMap()
+    # Interprest the map bounding box from the lon/lat given and the size of the desired map
+    bbox = GUM.getBboxFromWGS84(args.lon[0], args.lat[0], args.alt_epsg, args.size)
+
+    try:
+        rospack = rospkg.RosPack()
+        directory = os.path.join(rospack.get_path('usgs_map_retrieval'), 'worlds')
+        if not os.path.exists(directory):
+            raise FileNotFoundError
+    except:
+        directory = ''
+
+    # Get an instance of the class that simplifies updating the .world file
+    WFU = WorldFileUpdate(directory = directory)
+
+    # The "size" element refers to the resolution of the map witch must be 2*N + 1 for the heightmap
+    req_json['heightmap']['size'] = '%i,%i' % (2**args.heightmap_res + 1, 2**args.heightmap_res + 1)
+    # The "size" element refers to the resolution of the texture map
+    req_json['texture']['size'] = '%i,%i' % (args.texture_res, args.texture_res)
+
+    for map_name in args.maps:
+        if (args.url):
+            print('%sURL: %s' % (map_name, req_url[map_name]))
+
+        # Set the bounding box for the heightmap image
+        req_json[map_name]['bbox'] = bbox
+        # Set the desired projection of the returned map image
+        req_json[map_name]['imageSR'] = args.epsg_num
+        # Get the map-- will not send an actual request if either request_url or url are True
+        request_url = GUM.GetMap(req_url[map_name], req_json[map_name], os.path.join(directory, map_name), args.request_url or args.url)
+        if (args.request_url):
+            print('%sREQ: %s' % (map_name, request_url))
+
+    if 'heightmap' in args.maps:
+        if ((not args.url) and (not args.request_url)):
+            # Set the heigtmap offset in the world file
+            WFU.setHeightmapOffset(os.path.join(directory, 'heightmap.tif'))
+
+    if 'texture' in args.maps:
+        if ((not args.url) and (not args.request_url)):
+            # Set the scale of the texture in the world file based on the size of the retrieved map
+            WFU.setTextureScale(args.size)
+
+    purgeGazeboFiles()

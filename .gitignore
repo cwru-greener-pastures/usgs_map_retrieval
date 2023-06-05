@@ -1,0 +1,10 @@
+# Backup files
+*~
+*.bak
+\#*\#
+
+# Do not add any of the files in the worlds subdirectory
+worlds/*
+
+# Do not add the python cache directory
+src/usgs_simulation_environment/__pycache__/

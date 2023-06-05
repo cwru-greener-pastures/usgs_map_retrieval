@@ -1,0 +1,211 @@
+#!/usr/bin/env python
+
+from usgs_map_retrieval.get_usgs_map_module import GetUSGSMap
+
+import argparse, os.path, yaml
+
+try:
+    import rospkg
+except:
+    pass
+
+textureURL = 'https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPPlus/ImageServer/exportImage'
+heightmapURL = 'https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/exportImage'
+
+req_json = {'aspect': None, 'slope': None, 'roads': None, 'wetlands': None}
+req_url = {'aspect': None, 'slope': None, 'roads': None, 'wetlands': None}
+
+req_url['aspect'] = textureURL
+req_json['aspect'] = {'bbox': '',
+            'bboxSR': 3857,
+            'size': '',
+            'imageSR': 4326, 
+            'time': '',
+            'format': 'tiff',
+            'pixelType': 'UNKNOWN',
+            'noData': '',
+            'noDataInterpretation': 'esriNoDataMatchAny',
+            'interpolation': '+RSP_BilinearInterpolation',
+            'compression': '',
+            'compressionQuality': '',
+            'bandIds': '',
+            'sliceId': '',
+            'mosaicRule': '',
+            'renderingRule': {'rasterFunction': 'Aspect'},
+            'f': 'json'}
+
+req_url['slope'] = heightmapURL
+req_json['slope'] = {'bbox': '',
+            'bboxSR': 3857,
+            'size': '',
+            'imageSR': 4326, 
+            'time': '',
+            'format': 'tiff',
+            'pixelType': 'UNKNOWN',
+            'noData': '',
+            'noDataInterpretation': 'esriNoDataMatchAny',
+            'interpolation': '+RSP_BilinearInterpolation',
+            'compression': '',
+            'compressionQuality': '',
+            'bandIds': '',
+            'sliceId': '',
+            'mosaicRule': '',
+            'renderingRule': {
+                'rasterFunction' : 'Slope',
+                'rasterFunctionArguments' : {
+                    'ZFactor' : 2.0, # <ZFactor> //double (e.g. 0.3)
+                    # 'SlopeType': 1, # <SlopeType>,//new at 10.2. 1=DEGREE, 2=PERCENTRISE, 3=SCALED. default is 1.	
+                    # 'PSPower': 'double', # <PSPower>,//new at 10.2. double, used together with SCALED slope type	
+                    # 'PSZFactor': 'double', # <PSZFactor>,//new at 10.2. double, used together with SCALED slope type	
+                    # 'RemoveEdgeEffect': 'True', # <RemoveEdgeEffect>//new at 10.2. boolean, true of false
+                    # 'DEM': 'ImageService', # <raster>//optional, default is the image service 	
+                    },
+                'outputPixelType' : 'UNKNOWN', # //optional
+                # 'variableName' : 'DEM',
+                },
+            'f': 'json'}
+
+req_url['roads'] = 'https://carto.nationalmap.gov/arcgis/rest/services/transportation/MapServer/export'
+req_json['roads'] = {'bbox': '',
+            'bbSR': 3875,
+            'layers': 'show:29,30,31,32,33',
+            'layerDefs': '',
+            'size': '',
+            'imageSR': '',
+            'historicMoment': '',
+            'format': 'png',
+            'transparent': 'false',
+            'dpi': '',
+            'time': '',
+            'layerTimeOptions': '',
+            'dynamicLayers': '',
+            'gdbVersion': '',
+            'mapScale': '',
+            'rotation': '',
+            'datumTransformations': '',
+            'layerParameterValues': '',
+            'mapRangeValues': '',
+            'layerRangeValues': '',
+            'clipping': '',
+            'spatialFilter': '',
+            'f': 'json'
+            }
+
+req_url['wetlands'] = 'https://fwspublicservices.wim.usgs.gov/wetlandsmapservice/rest/services/WetlandsTopo/WetlandsTopoService/MapServer/export'
+req_json['wetlands'] = {'bbox': '',
+                'bbSR': 3875,
+                'layers': 'show:1',
+                'layerDefs': '',
+                'size': '',
+                'imageSR': '',
+                'historicMoment': '',
+                'format': 'png',
+                'transparent': 'false',
+                'dpi': '',
+                'time': '',
+                'layerTimeOptions': '',
+                'dynamicLayers': '',
+                'gdbVersion': '',
+                'mapScale': '',
+                'rotation': '',
+                'datumTransformations': '',
+                'layerParameterValues': '',
+                'mapRangeValues': '',
+                'layerRangeValues': '',
+                'clipping': '',
+                'spatialFilter': '',
+                'f': 'json'
+                }
+
+def saveConfigFile(filename, data):
+    out = open(filename, 'w')
+    out.write(yaml.safe_dump(data, indent=4, sort_keys=False))
+    out.close()
+
+if __name__ == '__main__':
+    blacksburg_coords = (37.221274,-80.434634)
+
+    test_coords = blacksburg_coords
+
+    parser = argparse.ArgumentParser(description='Retrieve USGS Data for use as maps for robots.\nThis accepts WGS 84 Longitude/Latitude (typical GPS or web map coordinates).')
+
+    parser.add_argument('lon', 
+                        type=float, 
+                        nargs=1,
+                        help='Longitude')
+    parser.add_argument('lat', 
+                        type=float, 
+                        nargs=1,
+                        help='Latitude')
+    parser.add_argument('-s', '--size',
+                        type=int, 
+                        nargs=1,
+                        required=False,
+                        default=1028,
+                        help='Size in meters of the environment (square)')
+    parser.add_argument('-r', '--resolution',
+                        type=int, 
+                        nargs=1,
+                        required=False,
+                        default=1028,
+                        help='Resolution of the map')
+    parser.add_argument('-q', '--alt_epsg',
+                        type=int,
+                        nargs=1,
+                        required=False,
+                        default=4326,
+                        help='The EPSG number in which the lon/lat coordinates are specified')
+    parser.add_argument('-e', '--epsg_num', 
+                        type=int, 
+                        nargs=1,
+                        required=False,
+                        default=3857,
+                        help='EPSG number in which to return the map')
+    parser.add_argument('-f', '--format', 
+                        choices=['png', 'jpgpng', 'tiff', 'jpg', 'bmp', 'ps', 'pdf'], 
+                        nargs=1,
+                        required=False,
+                        default=['png'],
+                        help='Map type')
+    parser.add_argument('-m', '--maps', 
+                        choices=req_json.keys(), 
+                        nargs='*',
+                        required=False,
+                        default=req_json.keys(),
+                        help='Which map to acquire')
+    parser.add_argument('--url', 
+                        action='store_true',
+                        help='Display the server URLs')
+    parser.add_argument('--request_url', 
+                        action='store_true',
+                        help='Display the full request URLs')
+
+    args = parser.parse_args()
+
+    try:
+        rospack = rospkg.RosPack()
+        directory = rospack.get_path('usgs_map_retrieval')
+        if not os.path.exists(directory):
+            raise FileNotFoundError
+    except:
+        directory = ''
+
+    GUM = GetUSGSMap()
+
+    map_config = {'image': None,
+                  'resolution': args.size / args.resolution,
+                  'occupied_threshold': 0.65,
+                  'free_threshold': 0.196,
+                  'negate': 0}
+
+    for map_name in args.maps:
+
+        req_json[map_name]['size'] = '%i,%i' % (args.resolution, args.resolution)
+        req_json[map_name]['bbox'] = GUM.getBboxFromWGS84(args.lon[0], args.lat[0], args.alt_epsg, int(req_json[map_name]['size'].split(',')[0]))
+        GUM.GetMap(req_url[map_name], req_json[map_name], os.path.join(directory, map_name))
+        map_config['image'] = map_name + '.png'
+        map_config['origin'] = [min(req_json[map_name]['bbox'][0], req_json[map_name]['bbox'][2]),
+                                min(req_json[map_name]['bbox'][1], req_json[map_name]['bbox'][3]),
+                                0.0],
+        saveConfigFile(os.path.join(directory, 'config', map_name + '.yaml'), map_config)
+
