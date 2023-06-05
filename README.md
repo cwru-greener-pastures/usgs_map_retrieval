@@ -73,7 +73,6 @@ This launch file is fully compatible with the standard `empty_world.launch` file
 
 > `roslaunch gazebo_ros empty_world.launch world_file:=usgs_simulation_environment`
 
-
 ## Usage without ROS
 
 This package was developed for use with ROS and Gazebo.  It is ROS aware, but it can be used separately.  The difference is that when invoked via ROS, the `heightmap.tif`, `texture.png`, and `usgs_simulation_environment.world` files will be placed in the `worlds` subdirectory of the package automatically.  The other maps will be placed in the `config` subdirectory of the pacakge.  When used without ROS, all files will be placed in the Current Working Directory.  Gazebo, or any other environment, must be configured manually in this case.
@@ -82,7 +81,11 @@ This package was developed for use with ROS and Gazebo.  It is ROS aware, but it
 
 If this package is used for academic pursuits, please cite it as the following:
 
-*The Greener Pastures USGS Simulation Environment Package for ROS/Gazebo*, (Version Number/Year), Lee, G., Available: https://github.com/cwru-greener-pastures/usgs_map_retrieval
+*The Greener Pastures USGS Map Retrieval Package for ROS/Gazebo*, (Version Number/Year), Lee, G., Available: https://github.com/cwru-greener-pastures/usgs_map_retrieval
+
+## Sponsor
+
+USDA-NIFA/NSF-CPS programs, Award Number 2021-67021-34459
 
 
 (C) Copyright 2023, Gregory S. Lee, Ph.D.
