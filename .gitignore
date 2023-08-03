@@ -7,4 +7,6 @@
 worlds/*
 
 # Do not add the python cache directory
-src/usgs_simulation_environment/__pycache__/
+**/__pycache__/
+
+.vscode/*

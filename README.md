@@ -14,6 +14,8 @@ This project connects to those servers using the ArGIS REST protocol at the foll
 > [USGS Transportation Service](https://carto.nationalmap.gov/arcgis/rest/services) for transportation (`roads`) maps.
 >
 > [USGS Rendering of US Fish & Wildlife Weland Maps](https://fwspublicservices.wim.usgs.gov/wetlandsmapservice/rest/services) for `wetland` maps.
+>
+> [MS Building Footprints]('https://services.arcgis.com/P3ePLMYs2RVChkJx/ArcGIS/rest/services/MSBFP2/FeatureServer') for building footprints based on AI interpretation of satellite images.  While not strictly a USGS dataset, this set is listed on the USGS servers.
 
 ## Navigation Maps
 
@@ -23,9 +25,9 @@ Maps useful for navigation can be retrieved from several USGS services.  Maps th
 - Aspect of slope of enviroment
 - Location of roads
 - Location of wetlands
-- ~~Building footprints~~  Not currently implemented
+- Building footprints
 
-The location of the map can be specified in WGS84 longitude/latitdude which is Coordinate Reference System (CRS) used by GPS devices and Google Maps.  (It is possibel to right click on a Google Map to inspect longitude and latitude.)
+The location of the map is specified in WGS84 longitude/latitdude which is Coordinate Reference System (CRS) used by GPS devices.  (It is possible to right click on [Google Map](http://maps.google.com) to inspect *latitude* and *longitude*.  *Make careful note of the order*.)
 
 ### Usage
 
@@ -35,9 +37,9 @@ All available maps can be retrieved using the following command:
 
 It is possible to retrieve specific maps using the following command:
 
-> `rosrun usgs_map_retrieval get_maps <`*`longitude`*`> <`*`latitude`*`> -m <aspect|slope|roads|wetlands>`
+> `rosrun usgs_map_retrieval get_maps <`*`longitude`*`> <`*`latitude`*`> -m <aspect|slope|roads|wetlands|footprints>`
 
-A `map-server` compatible configuration yaml is generated for each map during this process.
+A `map_server` compatible configuration `YAML` is generated for each map during this process.
 
 All files are saved to the `config` directory of the `usgs_map_retrieval` package if run in ROS, or in the Current Working Directory if run without ROS.
 
@@ -75,13 +77,15 @@ This launch file is fully compatible with the standard `empty_world.launch` file
 
 ## Usage without ROS
 
-This package was developed for use with ROS and Gazebo.  It is ROS aware, but it can be used separately.  The difference is that when invoked via ROS, the `heightmap.tif`, `texture.png`, and `usgs_simulation_environment.world` files will be placed in the `worlds` subdirectory of the package automatically.  The other maps will be placed in the `config` subdirectory of the pacakge.  When used without ROS, all files will be placed in the Current Working Directory.  Gazebo, or any other environment, must be configured manually in this case.
+This package was developed for use with ROS and Gazebo.  It is ROS aware, but it can be used separately.  The difference is that when invoked via ROS, the `heightmap.tif`, `texture.png`, and `usgs_simulation_environment.world` files will be placed in the `worlds` subdirectory of the package automatically.  Gazebo must be configured to find and use the world manually in this case.
+
+The navigation maps will be placed in the `config` subdirectory of the pacakge.  When used without ROS, all files will be placed in the Current Working Directory.  
 
 ## Citation
 
 If this package is used for academic pursuits, please cite it as the following:
 
-*The Greener Pastures USGS Map Retrieval Package for ROS/Gazebo*, (Version Number/Year), Lee, G., Available: https://github.com/cwru-greener-pastures/usgs_map_retrieval
+*USGS Data for Robot Navigation and Simulation*, (Version Number/Year), Lee, G., Available: https://github.com/cwru-greener-pastures/usgs_map_retrieval
 
 ## Sponsor
 

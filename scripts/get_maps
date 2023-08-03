@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 from usgs_map_retrieval.get_usgs_map_module import GetUSGSMap
+from usgs_map_retrieval.build_footprints_module import BuildFootprints
 
 import argparse, os.path, yaml
 
@@ -11,9 +12,10 @@ except:
 
 textureURL = 'https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPPlus/ImageServer/exportImage'
 heightmapURL = 'https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/exportImage'
+msBuildingFootprintsURL = 'https://services.arcgis.com/P3ePLMYs2RVChkJx/ArcGIS/rest/services/MSBFP2/FeatureServer/0/query'
 
-req_json = {'aspect': None, 'slope': None, 'roads': None, 'wetlands': None}
-req_url = {'aspect': None, 'slope': None, 'roads': None, 'wetlands': None}
+req_json = {'aspect': None, 'slope': None, 'roads': None, 'wetlands': None, 'footprints': None}
+req_url = {'aspect': None, 'slope': None, 'roads': None, 'wetlands': None, 'footprints': None}
 
 req_url['aspect'] = textureURL
 req_json['aspect'] = {'bbox': '',
@@ -67,11 +69,11 @@ req_json['slope'] = {'bbox': '',
 
 req_url['roads'] = 'https://carto.nationalmap.gov/arcgis/rest/services/transportation/MapServer/export'
 req_json['roads'] = {'bbox': '',
-            'bbSR': 3875,
+            'bbSR': 3857,
             'layers': 'show:29,30,31,32,33',
             'layerDefs': '',
             'size': '',
-            'imageSR': '',
+            'imageSR': 4326,
             'historicMoment': '',
             'format': 'png',
             'transparent': 'false',
@@ -97,7 +99,7 @@ req_json['wetlands'] = {'bbox': '',
                 'layers': 'show:1',
                 'layerDefs': '',
                 'size': '',
-                'imageSR': '',
+                'imageSR': 4326,
                 'historicMoment': '',
                 'format': 'png',
                 'transparent': 'false',
@@ -116,6 +118,53 @@ req_json['wetlands'] = {'bbox': '',
                 'spatialFilter': '',
                 'f': 'json'
                 }
+
+req_url['footprints'] = msBuildingFootprintsURL
+req_json['footprints'] = {'where': '',
+                        'objectIds': '',
+                        'time': '',
+                        'geometry': '',
+                        'geometryType': 'esriGeometryEnvelope',
+                        'inSR': 4326,
+                        'spatialRel': 'esriSpatialRelIntersects',
+                        'resultType': 'none',
+                        'distance': '0',
+                        'units': 'esriSRUnit_Meter',
+                        'relationParam': '',
+                        'returnGeodetic': 'false',
+                        'outFields': '',
+                        'returnGeometry': 'true',
+                        'returnCentroid': 'false',
+                        'featureEncoding': 'esriDefault',
+                        'multipatchOption': 'xyFootprint',
+                        'maxAllowableOffset': '',
+                        'geometryPrecision': '',
+                        'outSR': 4326,
+                        'defaultSR': '',
+                        'datumTransformation': '',
+                        'applyVCSProjection': 'false',
+                        'returnIdsOnly': 'false',
+                        'returnUniqueIdsOnly': 'false',
+                        'returnCountOnly': 'false',
+                        'returnExtentOnly': 'false',
+                        'returnQueryGeometry': 'true',
+                        'returnDistinctValues': 'false',
+                        'cacheHint': 'false',
+                        'orderByFields': '',
+                        'groupByFieldsForStatistics': '',
+                        'outStatistics': '',
+                        'having': '',
+                        'resultOffset': '',
+                        'resultRecordCount': '',
+                        'returnZ': 'false',
+                        'returnM': 'false',
+                        'returnExceededLimitFeatures': 'true',
+                        'quantizationParameters': '',
+                        'sqlFormat': 'none',
+                        'f': 'json',
+                        'token': ''
+                        }
+
 
 def saveConfigFile(filename, data):
     out = open(filename, 'w')
@@ -147,8 +196,8 @@ if __name__ == '__main__':
                         type=int, 
                         nargs=1,
                         required=False,
-                        default=1028,
-                        help='Resolution of the map')
+                        default=1,
+                        help='Resolution of the map (meters/pixel)')
     parser.add_argument('-q', '--alt_epsg',
                         type=int,
                         nargs=1,
@@ -182,30 +231,56 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    conf_dir = ''
     try:
         rospack = rospkg.RosPack()
         directory = rospack.get_path('usgs_map_retrieval')
         if not os.path.exists(directory):
             raise FileNotFoundError
+        conf_dir = 'config'
     except:
         directory = ''
 
     GUM = GetUSGSMap()
 
     map_config = {'image': None,
-                  'resolution': args.size / args.resolution,
+                  'resolution': args.resolution,
+                  'size': args.size,
                   'occupied_threshold': 0.65,
                   'free_threshold': 0.196,
                   'negate': 0}
 
     for map_name in args.maps:
+        try:
+            if req_json[map_name]['format'] == 'tiff':
+                ename = 'tif'
+            else:
+                ename = req_json[map_name]['format']
+            map_config['image'] = os.path.join(conf_dir, map_name + os.path.extsep + ename)
+        except:
+            map_config['image'] = os.path.join(conf_dir, map_name + os.path.extsep + 'png')
 
-        req_json[map_name]['size'] = '%i,%i' % (args.resolution, args.resolution)
-        req_json[map_name]['bbox'] = GUM.getBboxFromWGS84(args.lon[0], args.lat[0], args.alt_epsg, int(req_json[map_name]['size'].split(',')[0]))
-        GUM.GetMap(req_url[map_name], req_json[map_name], os.path.join(directory, map_name))
-        map_config['image'] = map_name + '.png'
-        map_config['origin'] = [min(req_json[map_name]['bbox'][0], req_json[map_name]['bbox'][2]),
-                                min(req_json[map_name]['bbox'][1], req_json[map_name]['bbox'][3]),
-                                0.0],
-        saveConfigFile(os.path.join(directory, 'config', map_name + '.yaml'), map_config)
+        geom = GUM.getBboxFromWGS84(args.lon[0], args.lat[0], args.alt_epsg, int(args.size), args.epsg_num)
 
+        if (map_name == 'footprints'):
+            req_json[map_name]['inSR'] = args.epsg_num
+            req_json[map_name]['geometry'] = '%f,%f,%f,%f' % geom
+            req_json[map_name]['outSR'] = args.epsg_num
+            map_config['origin'] = tuple([min(geom[0], geom[2]),
+                                    min(geom[1], geom[3]),
+                                    0.0])
+            map_config['map_json'] = os.path.join(conf_dir, map_name + os.path.extsep + 'json')
+
+        else:
+            req_json[map_name]['bbox'] = '%f,%f,%f,%f' % geom
+            req_json[map_name]['size'] = '%i,%i' % (args.size/args.resolution, args.size/args.resolution)
+            map_config['origin'] = tuple([min(req_json[map_name]['bbox'][0], req_json[map_name]['bbox'][2]),
+                                    min(req_json[map_name]['bbox'][1], req_json[map_name]['bbox'][3]),
+                                    0.0])
+
+        GUM.GetMap(req_url[map_name], req_json[map_name], os.path.join(directory, conf_dir, map_name))
+        saveConfigFile(os.path.join(directory, conf_dir, map_name + '.yaml'), map_config)
+
+
+        if (map_name == "footprints"):
+            BF = BuildFootprints(os.path.join(conf_dir, map_name + os.path.extsep + 'yaml'))
